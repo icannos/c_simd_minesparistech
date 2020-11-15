@@ -46,7 +46,7 @@ float vect_norm(float *U, long N) {
 
     // We use vector operation to compute the square root and the absolute value
     // Then we add the vector to the accumulator using vector add
-    // Doing so we gain a x4 in time to compute the sum
+    // Doing so we gain a x8 in time to compute the sum
     for (long i = 0; i < N / 8; i++)
         acc = _mm256_add_ps(acc, _mm256_sqrt_ps(abs_ps(U_vect[i])));
 
