@@ -70,10 +70,10 @@ typedef struct {
     // size of the considered array
     long size;
 
-} array_t;
+} threadarg_t;
 
 // routine used to encapsulate the call to the norm function in each thread
-void norm_routine(array_t* args)
+void norm_routine(threadarg_t* args)
 {
     // We compute the norm using the given norm function
     // We store the result at the requested adress
@@ -119,7 +119,7 @@ float normPar(float *U, long N, unsigned char mode, unsigned  int nb_threads) {
 
         for (long i = 1; i < nb_threads; i++) {
             // We construct the argument for each thread
-            array_t args;
+            threadarg_t args;
             args.begin = &U[i * elt_per_thread];
             args.size = elt_per_thread;
             args.norm_fn = norm_fn;
@@ -134,12 +134,16 @@ float normPar(float *U, long N, unsigned char mode, unsigned  int nb_threads) {
             exit(1);
         }
 
+        // Computations in the main thread
+        // We direclty store it in our result variable
         float r = norm_fn(U, elt_per_thread);
 
         errcode = 0;
 
         for (long i = 1; i < nb_threads; i++) {
             errcode += pthread_join(pool[i], NULL);
+
+            // When the threads end, we retrieve their result and add it into the result variable
             r += results[i];
         }
 
