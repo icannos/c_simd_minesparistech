@@ -106,36 +106,33 @@ float normPar(float *U, long N, unsigned char mode, unsigned  int nb_threads) {
         // We begin by initializing the argument for each thread
 
         long elt_per_thread = (long) (N / nb_threads);
+
+        // In case of non aligned data
         long rem = N % nb_threads;
 
-        //printf("%d\n", elt_per_thread);
-
-        array_t *args = (array_t *) aligned_alloc(CACHE_LINE_SIZE, sizeof(array_t) * nb_threads);
+        // array_t *args = (array_t *) aligned_alloc(CACHE_LINE_SIZE, sizeof(array_t) * nb_threads);
 
         pthread_t *pool = (pthread_t *) aligned_alloc(CACHE_LINE_SIZE, sizeof(pthread_t) *  (nb_threads-1));
         float *results = (float *) aligned_alloc(CACHE_LINE_SIZE, sizeof(float) * nb_threads);
 
-        long errcode = 0;
+        int errcode = 0;
+
         for (long i = 1; i < nb_threads; i++) {
             // We construct the argument for each thread
-            args[i].begin = &U[i * elt_per_thread];
-            args[i].size = elt_per_thread;
-            args[i].norm_fn = norm_fn;
-            args[i].result = &results[i];
+            array_t args;
+            args.begin = &U[i * elt_per_thread];
+            args.size = elt_per_thread;
+            args.norm_fn = norm_fn;
+            args.result = &results[i];
+
             // We create the thread
-            errcode += (long) pthread_create(&pool[i], NULL, (void* (*)(void*)) norm_routine, &args[i]);
+            errcode += (int) pthread_create(&pool[i], NULL, (void* (*)(void*)) norm_routine, &args);
         }
 
         if (errcode != 0) {
             printf("Something went wront with thread creation");
             exit(1);
         }
-
-        args[0].begin = U;
-        args[0].size = elt_per_thread;
-        args[0].norm_fn = norm_fn;
-        args[0].result = &results[0];
-
 
         float r = norm_fn(U, elt_per_thread);
 
@@ -154,7 +151,7 @@ float normPar(float *U, long N, unsigned char mode, unsigned  int nb_threads) {
 
         // Free our memory
         free(pool);
-        free(args);
+        //free(args);
         free(results);
 
         return r;
@@ -171,54 +168,77 @@ float normPar(float *U, long N, unsigned char mode, unsigned  int nb_threads) {
 
 
 int main(int argc, char *argv[]) {
+
+    // Check for arguments
     if(argc < 3) {
         printf("Not enough arguments. 2 are required");
         exit(1);
     }
 
-    srand((long)time(NULL));
+    // init random seed
+    srand((unsigned int)time(NULL));
 
+    // Get number of elements
     long N = (long) atol(argv[1]);
-    unsigned int nb_thread = (long) atol(argv[2]);
 
+    // Get number of threads
+    unsigned int nb_thread = (unsigned int) atol(argv[2]);
+
+    // We allocate our array
+    // We align our array: it has 2 purposes: first it optimizes the cache
+    // and it guarantees us that the data are well aligned for the vectorial instructions
+    // since my cache line is 64
     float* U = (float*) aligned_alloc(CACHE_LINE_SIZE, sizeof(float)*N);
 
+    // Initialization
     for (long i = 0; i < N; i++)
-    {
-     U[i] = ((float)rand()/(float)(RAND_MAX));
-        //U[i] = 0.0000001f;
-    }
+     //U[i] = ((float)rand()/(float)(RAND_MAX));
+     U[i] = 1.0f; // To easily check the correctness of the output
 
+    // Use to store the result
     float result;
 
+    // =============================================================== \\
+    // Test of the classical method on a single thread
     clock_t begining_classic = clock();
     result = normPar(U, N, SCALAR, 1);
-    //result = norm(U, N);
     clock_t end_classic = clock();
 
     printf("%e\n", result);
+
+    // =============================================================== \\
+    // Test of the classical method multithreaded
 
     clock_t begining_classic_thread = clock();
     result = normPar(U, N, SCALAR, nb_thread);
     clock_t end_classic_thread = clock();
     printf("%e\n", result);
 
+    // =============================================================== \\
+    // Test of the vectorial method on a single thread
+
     clock_t begining_vect = clock();
     result = normPar(U, N, VECT, 1);
     clock_t end_vect = clock();
     printf("%e\n", result);
+
+    // =============================================================== \\
+    // Test of the vectoriel method multithreaded
 
     clock_t begining_vect_thread = clock();
     result = normPar(U, N, VECT, nb_thread);
     clock_t end_vect_thread = clock();
     printf("%e\n", result);
 
+    // =============================================================== \\
+    // Execution time comparison
 
     printf("Usual scalar norm, 1 thread: %e\n", (double) ((double) (end_classic-begining_classic)/CLOCKS_PER_SEC));
     printf("Usual scalar norm, %d thread: %e\n", nb_thread, (double) ((double)(end_classic_thread-begining_classic_thread)/CLOCKS_PER_SEC));
     printf("Vectorized norm, 1 thread: %e\n", (double) ((double)(end_vect - begining_vect)/CLOCKS_PER_SEC));
     printf("Vectorized norm, %d thread: %e\n",  nb_thread, (double) ((double)(end_vect_thread - begining_vect_thread)/CLOCKS_PER_SEC));
 
+    // free our memory
     free(U);
 
 
