@@ -77,7 +77,7 @@ void norm_routine(threadarg_t* args)
 {
     // We compute the norm using the given norm function
     // We store the result at the requested adress
-    *(args->result) = args->norm_fn(args->begin, args->size);
+    *args->result = args->norm_fn(args->begin, args->size);
 
     // We terminate the thread
     pthread_exit(NULL);
@@ -110,23 +110,23 @@ float normPar(float *U, long N, unsigned char mode, unsigned  int nb_threads) {
         // In case of non aligned data
         long rem = N % nb_threads;
 
-        // array_t *args = (array_t *) aligned_alloc(CACHE_LINE_SIZE, sizeof(array_t) * nb_threads);
+        threadarg_t *args = (threadarg_t *) aligned_alloc(CACHE_LINE_SIZE, sizeof(threadarg_t) * nb_threads);
 
         pthread_t *pool = (pthread_t *) aligned_alloc(CACHE_LINE_SIZE, sizeof(pthread_t) *  (nb_threads-1));
         float *results = (float *) aligned_alloc(CACHE_LINE_SIZE, sizeof(float) * nb_threads);
 
         int errcode = 0;
 
-        for (long i = 1; i < nb_threads; i++) {
+        for (long i = 1l; i < nb_threads; i++) {
             // We construct the argument for each thread
-            threadarg_t args;
-            args.begin = &U[i * elt_per_thread];
-            args.size = elt_per_thread;
-            args.norm_fn = norm_fn;
-            args.result = &results[i];
+            args[i].begin = &(U[i * elt_per_thread]);
+            args[i].size = elt_per_thread;
+            args[i].norm_fn = norm_fn;
+            args[i].result = &(results[i]);
 
             // We create the thread
-            errcode += (int) pthread_create(&pool[i], NULL, (void* (*)(void*)) norm_routine, &args);
+            errcode += (int) pthread_create(&pool[i], NULL, (void* (*)(void*)) norm_routine, &args[i]);
+
         }
 
         if (errcode != 0) {
@@ -140,11 +140,13 @@ float normPar(float *U, long N, unsigned char mode, unsigned  int nb_threads) {
 
         errcode = 0;
 
-        for (long i = 1; i < nb_threads; i++) {
+        for (long i = 1l; i < nb_threads; i++) {
+
             errcode += pthread_join(pool[i], NULL);
 
             // When the threads end, we retrieve their result and add it into the result variable
             r += results[i];
+
         }
 
         // Check if the joins succeded
@@ -155,7 +157,7 @@ float normPar(float *U, long N, unsigned char mode, unsigned  int nb_threads) {
 
         // Free our memory
         free(pool);
-        //free(args);
+        free(args);
         free(results);
 
         return r;
