@@ -5,3 +5,6 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_FLAGS "-pthread -mavx2 -lm -O3" )
 
 add_executable(projet main.c)
+
+find_package(Threads REQUIRED)
+target_link_libraries(projet PRIVATE Threads::Threads)
