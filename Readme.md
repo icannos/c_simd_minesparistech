@@ -17,10 +17,19 @@ We use cmake to configure and compile our project.
 
 ### Usage
 
+
+### Using Cmake
 `./run.sh` will create build directory and recompile if necessary and execute a default instance with 2^20 elements on 2 threads
 
 When compiled, you can directly use the exec file `build/projet`:
 
 ```bash
 ./build/projet nb_elts nb_threads
+```
+
+### By hand compilation
+
+```bash
+gcc main.c -pthread -mavx2 -lm -O3 -o projet
+./projet nb_elts nb_threads
 ```
