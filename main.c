@@ -10,8 +10,11 @@
 #define VECT 1
 #define SCALAR 0
 
+// On my machine a cache line is 64 bytes long
 #define CACHE_LINE_SIZE 64
 
+// type of a norm function
+// Used to pass the function to use to each thread through a structure
 typedef float (*normfn_t)(float *, long);
 
 __m256 abs_ps(__m256 x) {
@@ -57,16 +60,20 @@ float vect_norm(float *U, long N) {
 
 // to be passed to each thread
 typedef struct {
+    // A pointer to the norm function of type
+    // float (*)(float*, unsigned int)
     normfn_t norm_fn;
     // begining of the array to consider
     float *begin;
+    // Where to store the result of each thread
     float *result;
     // size of the considered array
     long size;
 
 } array_t;
 
-float norm_routine(array_t* args)
+// routine used to encapsulate the call to the norm function in each thread
+void norm_routine(array_t* args)
 {
     // We compute the norm using the given norm function
     // We store the result at the requested adress
@@ -88,9 +95,13 @@ float normPar(float *U, long N, unsigned char mode, unsigned  int nb_threads) {
         case VECT:
             norm_fn = &vect_norm;
             break;
+        default: // by default we use the scalar function
+            norm_fn = &norm;
+            break;
     }
 
 
+    // if more than one thread (one thread is actually handle in the main thread / process
     if (nb_threads > 1) {
         // We begin by initializing the argument for each thread
 
@@ -131,15 +142,17 @@ float normPar(float *U, long N, unsigned char mode, unsigned  int nb_threads) {
         errcode = 0;
 
         for (long i = 1; i < nb_threads; i++) {
-            errcode = pthread_join(pool[i], NULL);
+            errcode += pthread_join(pool[i], NULL);
             r += results[i];
         }
 
+        // Check if the joins succeded
         if (errcode != 0) {
             printf("Something went wront with thread join");
             exit(1);
         }
 
+        // Free our memory
         free(pool);
         free(args);
         free(results);
@@ -147,8 +160,10 @@ float normPar(float *U, long N, unsigned char mode, unsigned  int nb_threads) {
         return r;
     }
     else {
+        // Single thread: just call the wanted function on the array
         float result = norm_fn(U, N);
 
+        // Return the result
         return result;
 
     }
