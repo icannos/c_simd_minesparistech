@@ -212,6 +212,7 @@ int main(int argc, char *argv[]) {
     clock_t begining_classic_thread = clock();
     result = normPar(U, N, SCALAR, nb_thread);
     clock_t end_classic_thread = clock();
+
     printf("%e\n", result);
 
     // =============================================================== \\
@@ -220,6 +221,7 @@ int main(int argc, char *argv[]) {
     clock_t begining_vect = clock();
     result = normPar(U, N, VECT, 1);
     clock_t end_vect = clock();
+
     printf("%e\n", result);
 
     // =============================================================== \\
@@ -228,6 +230,7 @@ int main(int argc, char *argv[]) {
     clock_t begining_vect_thread = clock();
     result = normPar(U, N, VECT, nb_thread);
     clock_t end_vect_thread = clock();
+
     printf("%e\n", result);
 
     // =============================================================== \\
