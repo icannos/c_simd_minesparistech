@@ -59,6 +59,15 @@ float vect_norm(float *U, long N) {
     return result;
 }
 
+// Structure to make a mutex variable result
+typedef struct {
+    // Mutex to lock the use of the variable
+    pthread_mutex_t mutex;
+
+    // Will accumulate the sum for each thread
+    float v;
+} result_mutex_t;
+
 // to be passed to each thread
 typedef struct {
     // A pointer to the norm function of type
@@ -67,7 +76,7 @@ typedef struct {
     // begining of the array to consider
     float *begin;
     // Where to store the result of each thread
-    float *result;
+    result_mutex_t* result;
     // size of the considered array
     long size;
 
@@ -77,12 +86,23 @@ typedef struct {
 void norm_routine(threadarg_t* args)
 {
     // We compute the norm using the given norm function
-    // We store the result at the requested adress
-    *args->result = args->norm_fn(args->begin, args->size);
+    float r = args->norm_fn(args->begin, args->size);
 
+    // Computations are over, we want to add our result to the global result
+    //first we want to lock it
+    pthread_mutex_lock (&args->result->mutex);
+
+    // When locked we can add this partial sum to the global result
+    args->result->v += r;
+
+    // We unlock it when it is finished
+    pthread_mutex_unlock(&args->result->mutex);
+    
     // We terminate the thread
     pthread_exit(NULL);
 }
+
+
 
 float normPar(float *U, long N, unsigned char mode, unsigned  int nb_threads) {
     // pointer to the norm function to use
@@ -114,20 +134,33 @@ float normPar(float *U, long N, unsigned char mode, unsigned  int nb_threads) {
         threadarg_t *args = (threadarg_t *) aligned_alloc(CACHE_LINE_SIZE, sizeof(threadarg_t) * nb_threads);
 
         pthread_t *pool = (pthread_t *) aligned_alloc(CACHE_LINE_SIZE, sizeof(pthread_t) *  (nb_threads-1));
-        float *results = (float *) aligned_alloc(CACHE_LINE_SIZE, sizeof(float) * nb_threads);
+
+
+        result_mutex_t result;
+        result.v = 0;
+        result.mutex = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
+
+
 
         int errcode = 0;
 
+        args[0].begin = &(U[0]);
+        args[0].size = elt_per_thread;
+        args[0].norm_fn = norm_fn;
+        args[0].result = &result;
+
         for (long i = 1l; i < nb_threads; i++) {
+
             // We construct the argument for each thread
             args[i].begin = &(U[i * elt_per_thread]);
             args[i].size = elt_per_thread;
             args[i].norm_fn = norm_fn;
-            args[i].result = &(results[i]);
+            args[i].result = &result;
+
+
 
             // We create the thread
             errcode += (int) pthread_create(&pool[i], NULL, (void* (*)(void*)) norm_routine, &args[i]);
-
         }
 
         if (errcode != 0) {
@@ -136,18 +169,20 @@ float normPar(float *U, long N, unsigned char mode, unsigned  int nb_threads) {
         }
 
         // Computations in the main thread
-        // We direclty store it in our result variable
-        float r = norm_fn(U, elt_per_thread);
+        float r = args[0].norm_fn(args[0].begin, args[0].size);
+        // Computations are over, we want to add our result to the global result
+        //first we want to lock it
+        pthread_mutex_lock (&args[0].result->mutex);
+        // When locked we can add this partial sum to the global result
+        args[0].result->v += r;
+        // We unlock it when it is finished
+        pthread_mutex_unlock(&args[0].result->mutex);
+
 
         errcode = 0;
 
         for (long i = 1l; i < nb_threads; i++) {
-
             errcode += pthread_join(pool[i], NULL);
-
-            // When the threads end, we retrieve their result and add it into the result variable
-            r += results[i];
-
         }
 
         // Check if the joins succeded
@@ -159,9 +194,8 @@ float normPar(float *U, long N, unsigned char mode, unsigned  int nb_threads) {
         // Free our memory
         free(pool);
         free(args);
-        free(results);
 
-        return r;
+        return result.v;
     }
     else {
         // Single thread: just call the wanted function on the array
