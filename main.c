@@ -207,46 +207,62 @@ int main(int argc, char *argv[]) {
 
     // =============================================================== \\
     // Test of the classical method on a single thread
-    clock_t begining_classic = clock();
+
+    struct timespec begining_classic;
+    clock_gettime(CLOCK_REALTIME, &begining_classic);
+
     result = normPar(U, N, SCALAR, 1);
-    clock_t end_classic = clock();
+
+    struct timespec end_classic;
+    clock_gettime(CLOCK_REALTIME, &end_classic);
 
     printf("%e\n", result);
 
     // =============================================================== \\
     // Test of the classical method multithreaded
 
-    clock_t begining_classic_thread = clock();
+    struct timespec begining_classic_thread;
+    clock_gettime(CLOCK_REALTIME, &begining_classic_thread);
+
     result = normPar(U, N, SCALAR, nb_thread);
-    clock_t end_classic_thread = clock();
+
+    struct timespec end_classic_thread;
+    clock_gettime(CLOCK_REALTIME, &end_classic_thread);
 
     printf("%e\n", result);
 
     // =============================================================== \\
     // Test of the vectorial method on a single thread
+    struct timespec begining_vect;
+    clock_gettime(CLOCK_REALTIME, &begining_vect);
 
-    clock_t begining_vect = clock();
     result = normPar(U, N, VECT, 1);
-    clock_t end_vect = clock();
+
+    struct timespec end_vect;
+    clock_gettime(CLOCK_REALTIME, &end_vect);
 
     printf("%e\n", result);
 
     // =============================================================== \\
     // Test of the vectoriel method multithreaded
+    struct timespec begining_vect_thread;
+    clock_gettime(CLOCK_REALTIME, &begining_vect_thread);
 
-    clock_t begining_vect_thread = clock();
     result = normPar(U, N, VECT, nb_thread);
-    clock_t end_vect_thread = clock();
+
+    struct timespec end_vect_thread;
+    clock_gettime(CLOCK_REALTIME, &end_vect_thread);
+
 
     printf("%e\n", result);
 
     // =============================================================== \\
     // Execution time comparison
 
-    printf("Usual scalar norm, 1 thread: %e\n", (double) ((double) (end_classic-begining_classic)/CLOCKS_PER_SEC));
-    printf("Usual scalar norm, %d thread: %e\n", nb_thread, (double) ((double)(end_classic_thread-begining_classic_thread)/CLOCKS_PER_SEC));
-    printf("Vectorized norm, 1 thread: %e\n", (double) ((double)(end_vect - begining_vect)/CLOCKS_PER_SEC));
-    printf("Vectorized norm, %d thread: %e\n",  nb_thread, (double) ((double)(end_vect_thread - begining_vect_thread)/CLOCKS_PER_SEC));
+    printf("Usual scalar norm, 1 thread: %e\n", (double) ((double) (end_classic.tv_nsec-begining_classic.tv_nsec) * 1E-9));
+    printf("Usual scalar norm, %d thread: %e\n", nb_thread, (double) ((double)(end_classic_thread.tv_nsec-begining_classic_thread.tv_nsec)* 1E-9));
+    printf("Vectorized norm, 1 thread: %e\n", (double) ((double)(end_vect.tv_nsec - begining_vect.tv_nsec)* 1E-9));
+    printf("Vectorized norm, %d thread: %e\n",  nb_thread, (double) ((double)(end_vect_thread.tv_nsec - begining_vect_thread.tv_nsec)* 1E-9));
 
     // free our memory
     free(U);
