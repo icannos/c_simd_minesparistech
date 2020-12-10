@@ -233,8 +233,8 @@ int main(int argc, char *argv[]) {
 
     // Initialization
     for (long i = 0; i < N; i++)
-     //U[i] = ((float)rand()/(float)(RAND_MAX));
-     U[i] = 1.0f; // To easily check the correctness of the output
+        U[i] = ((float)rand()/(float)(RAND_MAX));
+     //U[i] = 1.0f; // To easily check the correctness of the output
 
     // Use to store the result
     float result;

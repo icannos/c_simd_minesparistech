@@ -28,8 +28,8 @@ __m256 abs_ps(__m256 x) {
 // Classical norm function
 float norm(float *U, long N) {
     float d=0;
-        for (long i = 0; i < N; i++)
-            d += sqrtf(fabsf(U[i]));
+    for (long i = 0; i < N; i++)
+        d += sqrtf(fabsf(U[i]));
 
     return d;
 }
@@ -37,7 +37,7 @@ float norm(float *U, long N) {
 
 float vect_norm(float *U, long N) {
     // ptr on the array to perform the sum on
-    __m256 *U_vect = (__m256 *) U;
+
 
     // Accumulator to store 8 partial sums
     __m256 acc = _mm256_set1_ps(0.0f);
@@ -49,7 +49,20 @@ float vect_norm(float *U, long N) {
     // Then we add the vector to the accumulator using vector add
     // Doing so we gain a x8 in time to compute the sum
     for (long i = 0; i < N / 8; i++)
-        acc = _mm256_add_ps(acc, _mm256_sqrt_ps(abs_ps(U_vect[i])));
+        acc = _mm256_add_ps(acc, _mm256_sqrt_ps(abs_ps(_mm256_loadu_ps(&U[i*8]))));
+
+    // Check if data are aligned
+    long r = N % 8;
+
+    if (r > 0) {
+        __mmask8 mask = {0,0,0,0,0,0,0,0};
+        int *mask_ptr = (int *) &mask;
+        for (long i = 0; i < r; i++)
+            mask_ptr[i] = 1;
+
+        __m256 remainder = _mm256_maskz_loadu_ps(mask, &U[8 * (N/8)]);
+        acc = _mm256_add_ps(acc, remainder);
+    }
 
     // We only have to sum the 8 float in the acc vector
     float result = 0;
@@ -195,13 +208,12 @@ int main(int argc, char *argv[]) {
     // We align our array: it has 2 purposes: first it optimizes the cache
     // and it guarantees us that the data are well aligned for the vectorial instructions
     // since my cache line is 64
-    // It also ensures that parallel words are well aligned
     float* U = (float*) aligned_alloc(CACHE_LINE_SIZE, sizeof(float)*N);
 
     // Initialization
     for (long i = 0; i < N; i++)
-        U[i] = ((float)rand()/(float)(RAND_MAX));
-     //U[i] = 1.0f; // To easily check the correctness of the output
+        //U[i] = ((float)rand()/(float)(RAND_MAX));
+        U[i] = 1.0f; // To easily check the correctness of the output
 
     // Use to store the result
     float result;
