@@ -29,7 +29,7 @@ We use cmake to configure and compile our project.
 ## Notes about the compilation
 
 It is worth to point out that gcc will automatically vectorize loops using vector instructions thus reducing the 
-difference between the manual vectorized optimization and the naive code. That is why we set the `-O0` option.
+difference between the manual vectorized optimization and the naive code. That is why we set the `-O1` option.
 
 ## Usage
 
@@ -47,14 +47,12 @@ When compiled, you can directly use the exec file `build/projet`:
 ### By hand compilation
 
 ```bash
-gcc main.c -pthread -mavx2 -lm -O0 -o projet
-./projet nb_elts nb_threads
+cd build
+gcc ../main.c -O1 -fno-tree-vectorize -lpthread -lm -mavx -o projet
+gcc ../mutex.c -O1 -fno-tree-vectorize -lpthread -lm -mavx -o projetmutex
+gcc ../nonvector.c -O1 -fno-tree-vectorize -lpthread -lm -o nonvector
 ```
 
-```bash
-gcc mutex.c -pthread -mavx2 -lm -O0 -o projetmutex
-./projetmutex nb_elts nb_threads
-```
 
 ## Non aligned data
 
@@ -70,22 +68,25 @@ using a mask to set to 0 the non-existing elements with `_mm256_maskz_load_ps`.
 Output of `./run`
 
 ```
-## Standard Version
-6.988261e+05
-6.987406e+05
-6.987094e+05
-6.987089e+05
-Usual scalar norm, 1 thread: 4.038417e-03
-Usual scalar norm, 2 thread: 2.291911e-03
-Vectorized norm, 1 thread: 1.157755e-03
-Vectorized norm, 2 thread: 8.525660e-04
-## Mutex Version
-6.988261e+05
-6.987406e+05
-6.987094e+05
-6.987089e+05
-Usual scalar norm, 1 thread: 3.276267e-03
-Usual scalar norm, 2 thread: 1.974854e-03
-Vectorized norm, 1 thread: 1.317278e-03
-Vectorized norm, 2 thread: 6.261590e-04
+Standard Version 2 threads
+2.238338e+07
+Usual scalar norm, 1 thread: 9.516592e-02
+Vectorized norm, 2 thread: 6.236485e-03
+Speedup x15.3
+Standard Version 4 threads
+2.237157e+07
+Usual scalar norm, 1 thread: 9.487285e-02
+Vectorized norm, 4 thread: 5.268700e-03
+Speedup x18.0
+Mutex Version 2 threads
+2.238682e+07
+Usual scalar norm, 1 thread: 9.660557e-02
+Vectorized norm, 2 thread: 4.894436e-03
+Speedup x19.7
+Mutex Version 4 threads
+2.237339e+07
+Usual scalar norm, 1 thread: 9.494633e-02
+Vectorized norm, 4 thread: 4.156646e-03
+Speedup x22.8
+
 ```

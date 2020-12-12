@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.18)
 project(projet C)
 
 set(CMAKE_C_STANDARD 11)
-set(CMAKE_C_FLAGS "-O1 -fno-tree-vectorize -lpthread -lm -mavx2")
+set(CMAKE_C_FLAGS "-O1 -fno-tree-vectorize -lpthread -lm -mavx")
 
 add_executable(projet main.c)
 add_executable(projetmutex mutex.c)
