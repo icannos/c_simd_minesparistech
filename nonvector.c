@@ -6,11 +6,7 @@
 #include <stdlib.h>
 
 #include <math.h>
-#include <pthread.h>
 #include <time.h>
-
-#define VECT 1
-#define SCALAR 0
 
 // On my machine a cache line is 64 bytes long
 #define CACHE_LINE_SIZE 64

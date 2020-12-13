@@ -13,17 +13,25 @@
 // On my machine a cache line is 64 bytes long
 #define CACHE_LINE_SIZE 64
 
-// type of a norm function
-// Used to pass the function to use to each thread through a structure
-typedef float (*normfn_t)(float *, long);
 
-__m256 abs_ps(__m256 x) {
-    // In order to get the absolute value on only need to flip the first bit to 0
-    // We use a mask with a bit to 1 on each first bit of each component of the vector
-    // Then we do a logical not and.
-    __m256 sign_mask = _mm256_set1_ps(-0.f); // -0.f = 1 << 31
-    return _mm256_andnot_ps(sign_mask, x);
+struct timespec diff(struct timespec start, struct timespec end)
+{
+    struct timespec temp;
+
+    if (end.tv_nsec-start.tv_nsec<0)
+    {
+        temp.tv_sec = end.tv_sec-start.tv_sec-1;
+        temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
+    }
+    else
+    {
+        temp.tv_sec = end.tv_sec-start.tv_sec;
+        temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+    }
+    return temp;
 }
+
+
 
 // Classical norm function
 float norm(float *U, long N) {
@@ -35,9 +43,9 @@ float norm(float *U, long N) {
 }
 
 
-float vect_norm(float *U, long N) {
+float vect_norm(float *U, unsigned int N) {
     // ptr on the array to perform the sum on
-
+    __m256* u_v = (__m256*) U;
 
     // Accumulator to store 8 partial sums
     __m256 acc = _mm256_set1_ps(0.0f);
@@ -45,28 +53,18 @@ float vect_norm(float *U, long N) {
     // Used later to sum horitally over the vector
     float *acc_fptr = (float *) &acc;
 
+    // Sign mask to take abs value
+    __m256 sign_mask = _mm256_set1_ps(-0.f);
+
     // We use vector operation to compute the square root and the absolute value
     // Then we add the vector to the accumulator using vector add
     // Doing so we gain a x8 in time to compute the sum
-    for (long i = 0; i < N / 8; i++)
-        acc = _mm256_add_ps(acc, _mm256_sqrt_ps(abs_ps(_mm256_loadu_ps(&U[i*8]))));
-
-    // Check if data are aligned
-    long r = N % 8;
-
-    if (r > 0) {
-        __mmask8 mask = {0,0,0,0,0,0,0,0};
-        int *mask_ptr = (int *) &mask;
-        for (long i = 0; i < r; i++)
-            mask_ptr[i] = 1;
-
-        __m256 remainder = _mm256_maskz_loadu_ps(mask, &U[8 * (N/8)]);
-        acc = _mm256_add_ps(acc, remainder);
-    }
+    for (unsigned int i = 0; i < N / 8; i++)
+        acc = _mm256_add_ps(acc, _mm256_sqrt_ps(_mm256_andnot_ps(sign_mask, u_v[i])));
 
     // We only have to sum the 8 float in the acc vector
     float result = 0;
-    for (long i = 0; i < 8ll; i++)
+    for (unsigned int i = 0; i < 8; i++)
         result += acc_fptr[i];
 
     return result;
@@ -74,9 +72,6 @@ float vect_norm(float *U, long N) {
 
 // to be passed to each thread
 typedef struct {
-    // A pointer to the norm function of type
-    // float (*)(float*, unsigned int)
-    normfn_t norm_fn;
     // begining of the array to consider
     float *begin;
     // Where to store the result of each thread
@@ -91,7 +86,7 @@ void norm_routine(threadarg_t* args)
 {
     // We compute the norm using the given norm function
     // We store the result at the requested adress
-    *args->result = args->norm_fn(args->begin, args->size);
+    *args->result = vect_norm(args->begin, args->size);
 
     // We terminate the thread
     pthread_exit(NULL);
@@ -99,24 +94,10 @@ void norm_routine(threadarg_t* args)
 
 float normPar(float *U, long N, unsigned char mode, unsigned  int nb_threads) {
     // pointer to the norm function to use
-    normfn_t norm_fn;
-
-    // depends on the mode
-    switch (mode) {
-        case SCALAR:
-            norm_fn = &norm;
-            break;
-        case VECT:
-            norm_fn = &vect_norm;
-            break;
-        default: // by default we use the scalar function
-            norm_fn = &norm;
-            break;
-    }
 
 
     // if more than one thread (one thread is actually handle in the main thread / process
-    if (nb_threads > 1) {
+    if (mode == VECT) {
         // We begin by initializing the argument for each thread
 
         long elt_per_thread = (long) (N / nb_threads);
@@ -131,12 +112,11 @@ float normPar(float *U, long N, unsigned char mode, unsigned  int nb_threads) {
 
         int errcode = 0;
 
-        for (long i = 1l; i < nb_threads; i++) {
+        for (unsigned int i = 1; i < nb_threads; i++) {
             // We construct the argument for each thread
             args[i].begin = &(U[i * elt_per_thread]);
             args[i].size = elt_per_thread;
-            args[i].norm_fn = norm_fn;
-            args[i].result = &(results[i]);
+            args[i].result = results+i;
 
             // We create the thread
             errcode += (int) pthread_create(&pool[i], NULL, (void* (*)(void*)) norm_routine, &args[i]);
@@ -144,17 +124,17 @@ float normPar(float *U, long N, unsigned char mode, unsigned  int nb_threads) {
         }
 
         if (errcode != 0) {
-            printf("Something went wront with thread creation");
+            printf("Something went wrong with thread creation");
             exit(1);
         }
 
         // Computations in the main thread
         // We direclty store it in our result variable
-        float r = norm_fn(U, elt_per_thread);
+        float r = vect_norm(U, elt_per_thread);
 
         errcode = 0;
 
-        for (long i = 1l; i < nb_threads; i++) {
+        for (unsigned i = 1; i < nb_threads; i++) {
 
             errcode += pthread_join(pool[i], NULL);
 
@@ -178,7 +158,7 @@ float normPar(float *U, long N, unsigned char mode, unsigned  int nb_threads) {
     }
     else {
         // Single thread: just call the wanted function on the array
-        float result = norm_fn(U, N);
+        float result = norm(U, N);
 
         // Return the result
         return result;
@@ -199,10 +179,10 @@ int main(int argc, char *argv[]) {
     srand((unsigned int)time(NULL));
 
     // Get number of elements
-    long N = (long) atol(argv[1]);
+    unsigned N = (unsigned int) atoi(argv[1]);
 
     // Get number of threads
-    unsigned int nb_thread = (unsigned int) atol(argv[2]);
+    unsigned int nb_thread = (unsigned int) atoi(argv[2]);
 
     // We allocate our array
     // We align our array: it has 2 purposes: first it optimizes the cache
@@ -212,8 +192,8 @@ int main(int argc, char *argv[]) {
 
     // Initialization
     for (long i = 0; i < N; i++)
-        //U[i] = ((float)rand()/(float)(RAND_MAX));
-        U[i] = 1.0f; // To easily check the correctness of the output
+        U[i] = ((float)rand()/(float)(RAND_MAX));
+        //U[i] = 1.0f; // To easily check the correctness of the output
 
     // Use to store the result
     float result;
@@ -232,31 +212,6 @@ int main(int argc, char *argv[]) {
     printf("%e\n", result);
 
     // =============================================================== \\
-    // Test of the classical method multithreaded
-
-    struct timespec begining_classic_thread;
-    clock_gettime(CLOCK_REALTIME, &begining_classic_thread);
-
-    result = normPar(U, N, SCALAR, nb_thread);
-
-    struct timespec end_classic_thread;
-    clock_gettime(CLOCK_REALTIME, &end_classic_thread);
-
-    printf("%e\n", result);
-
-    // =============================================================== \\
-    // Test of the vectorial method on a single thread
-    struct timespec begining_vect;
-    clock_gettime(CLOCK_REALTIME, &begining_vect);
-
-    result = normPar(U, N, VECT, 1);
-
-    struct timespec end_vect;
-    clock_gettime(CLOCK_REALTIME, &end_vect);
-
-    printf("%e\n", result);
-
-    // =============================================================== \\
     // Test of the vectoriel method multithreaded
     struct timespec begining_vect_thread;
     clock_gettime(CLOCK_REALTIME, &begining_vect_thread);
@@ -269,14 +224,22 @@ int main(int argc, char *argv[]) {
 
     printf("%e\n", result);
 
+    printf("%e\n", result);
+
     // =============================================================== \\
     // Execution time comparison
 
-    printf("Usual scalar norm, 1 thread: %e\n", (double) ((double) (end_classic.tv_nsec-begining_classic.tv_nsec) * 1E-9));
-    printf("Usual scalar norm, %d thread: %e\n", nb_thread, (double) ((double)(end_classic_thread.tv_nsec-begining_classic_thread.tv_nsec)* 1E-9));
-    printf("Vectorized norm, 1 thread: %e\n", (double) ((double)(end_vect.tv_nsec - begining_vect.tv_nsec)* 1E-9));
-    printf("Vectorized norm, %d thread: %e\n",  nb_thread, (double) ((double)(end_vect_thread.tv_nsec - begining_vect_thread.tv_nsec)* 1E-9));
+    struct timespec classic = diff(begining_classic, end_classic);
+    struct timespec vect = diff(begining_vect_thread, end_vect_thread);
 
+    double d1 = (double) (classic.tv_sec * 1000000000l + classic.tv_nsec) * 1E-9;
+    double d2 = (double) (vect.tv_sec * 1000000000l + vect.tv_nsec) * 1E-9;
+
+
+    printf("Usual scalar norm, 1 thread: %e\n", d1);
+    printf("Vectorized norm, %d thread: %e\n", nb_thread, d2);
+
+    printf("Speedup x%0.1f\n", d1 / d2);
     // free our memory
     free(U);
 

@@ -7,7 +7,7 @@ gcc ../main.c -O1 -fno-tree-vectorize -lpthread -lm -mavx -o projet
 gcc ../mutex.c -O1 -fno-tree-vectorize -lpthread -lm -mavx -o projetmutex
 gcc ../nonvector.c -O1 -fno-tree-vectorize -lpthread -lm -o nonvector
 
-# 2^20 elts, on 2 threads
+# gcc ../unaligned.c -O1 -fno-tree-vectorize -lpthread -lm -o unaligned
 
 echo "Classic non vector"
 ./nonvector 33554432

@@ -75,21 +75,20 @@ float vect_norm(float *U, unsigned int N) {
 
 // to be passed to each thread
 typedef struct {
-    // A pointer to the norm function of type
     // begining of the array to consider
     float *begin;
     // Where to store the result of each thread
-    float *result;
+    float* result;
     // size of the considered array
     unsigned int size;
 
 } threadarg_t;
 
 // routine used to encapsulate the call to the norm function in each thread
-void norm_routine(threadarg_t *args) {
+float norm_routine(threadarg_t *args) {
     // We compute the norm using the given norm function
     // We store the result at the requested adress
-    *args->result = vect_norm(args->begin, args->size);
+    *(args->result)= vect_norm(args->begin, args->size);
 
     // We terminate the thread
     pthread_exit(NULL);
@@ -100,7 +99,6 @@ float normPar(float *U, unsigned int N, int mode, unsigned int nb_thread) {
 
     // depends on the mode
 
-    // if more than one thread (one thread is actually handle in the main thread / process
     if (mode == VECT) {
         // We begin by initializing the argument for each thread
 
@@ -109,17 +107,18 @@ float normPar(float *U, unsigned int N, int mode, unsigned int nb_thread) {
         threadarg_t *args = (threadarg_t *) aligned_alloc(CACHE_LINE_SIZE, sizeof(threadarg_t) * nb_thread);
 
         pthread_t *pool = (pthread_t *) aligned_alloc(CACHE_LINE_SIZE, sizeof(pthread_t) * nb_thread);
-        float *results = (float *) aligned_alloc(CACHE_LINE_SIZE, sizeof(float) * nb_thread);
+
+        // To avoid false sharing we want each result on a different cache line
+        float *results = (float *) aligned_alloc(CACHE_LINE_SIZE, (CACHE_LINE_SIZE) * nb_thread);
 
         int errcode = 0;
 
         for (unsigned int i = 1; i < nb_thread; i++) {
             // We construct the argument for each thread
-            args[i].begin = &U[i * elt_per_thread];
+            args[i].begin = U+i * elt_per_thread;
             args[i].size = elt_per_thread;
-            args[i].result = &results[i];
+            args[i].result = results+(CACHE_LINE_SIZE/sizeof(float))*i;
 
-            // We create the thread
             errcode += (int) pthread_create(&pool[i], NULL, (void *(*)(void *)) norm_routine, &args[i]);
 
         }
@@ -138,7 +137,7 @@ float normPar(float *U, unsigned int N, int mode, unsigned int nb_thread) {
         for (unsigned int i = 1; i < nb_thread; i++) {
             errcode += pthread_join(pool[i], NULL);
             // When the threads end, we retrieve their result and add it into the result variable
-            r += results[i];
+            r += results[(CACHE_LINE_SIZE/sizeof(float))*i];
         }
 
 
@@ -155,7 +154,7 @@ float normPar(float *U, unsigned int N, int mode, unsigned int nb_thread) {
 
         return r;
     } else {
-        // Single thread: just call the wanted function on the array
+        // If scalar: we just call the simple norm
         float result = norm(U, N);
 
         // Return the result

@@ -76,8 +76,6 @@ typedef struct {
 
 // to be passed to each thread
 typedef struct {
-    // A pointer to the norm function of type
-    // float (*)(float*, unsigned int)
     // begining of the array to consider
     float *begin;
     // Where to store the result of each thread
@@ -108,10 +106,7 @@ void norm_routine(threadarg_t *args) {
 
 
 float normPar(float *U, unsigned int N, unsigned char mode, unsigned int nb_threads) {
-    // pointer to the norm function to use
 
-
-    // if more than one thread (one thread is actually handle in the main thread / process
     if (mode == VECT) {
         // We begin by initializing the argument for each thread
 
@@ -119,8 +114,8 @@ float normPar(float *U, unsigned int N, unsigned char mode, unsigned int nb_thre
 
 
         threadarg_t *args = (threadarg_t *) aligned_alloc(CACHE_LINE_SIZE, sizeof(threadarg_t) * (nb_threads-1));
-
         pthread_t *pool = (pthread_t *) aligned_alloc(CACHE_LINE_SIZE, sizeof(pthread_t) * (nb_threads-1));
+
 
         // We initialize the mutex variable we want to use to store the result
         result_mutex_t result;
@@ -131,12 +126,12 @@ float normPar(float *U, unsigned int N, unsigned char mode, unsigned int nb_thre
 
         for (unsigned int i = 0; i < nb_threads-1; i++) {
             // We construct the argument for each thread
-            args[i].begin = &(U[i * elt_per_thread]);
+            args[i].begin = U+i * elt_per_thread;
             args[i].size = elt_per_thread;
             args[i].result = &result;
 
             // We create the thread
-            errcode += (int) pthread_create(&pool[i], NULL, (void *(*)(void *)) norm_routine, &args[i]);
+            errcode += (int) pthread_create(pool+i, NULL, (void *(*)(void *)) norm_routine, args+i);
         }
 
         if (errcode != 0) {
@@ -154,6 +149,8 @@ float normPar(float *U, unsigned int N, unsigned char mode, unsigned int nb_thre
             errcode += pthread_join(pool[i], NULL);
         }
 
+        // If all thread are terminated we can safely add the last partial sum
+
         result.v += r;
 
         // Check if the joins succeded
@@ -163,12 +160,12 @@ float normPar(float *U, unsigned int N, unsigned char mode, unsigned int nb_thre
         }
 
         // Free our memory
-        free(pool);
+        //free(pool);
         free(args);
 
         return result.v;
     } else {
-        // Single thread: just call the wanted function on the array
+        // If scalar: we just call the simple norm
         float result = norm(U, N);
 
         // Return the result
