@@ -24,7 +24,7 @@ It is worth to point out that the classical norm function converges to 2^24 = 16
 floats: when we reach 2^24, adding <= 1 to the variable is the same as adding 0 (no-op). This is because the mantisse
 is on 24 bits (23 + 1 implicit).
 
-`.
+```.
  ├── CMakeLists.txt
  ├── main.c                   # Classic multithreading 
  ├── manual_run.sh            # To compile using gcc and run some asmples
@@ -33,7 +33,7 @@ is on 24 bits (23 + 1 implicit).
  ├── Readme.md                # This file
  ├── run.sh                   # Compile using gcc
  └── unaligned.c              # Same as main but for non aligned data
-`
+```
 
 ## Requierments
 
