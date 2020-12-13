@@ -5,6 +5,8 @@ cd build
 cmake ..
 make
 
+echo "Classic non vector"
+./nonvector 33554432
 
 echo "Standard Version 2 threads"
 ./projet 33554432 2
