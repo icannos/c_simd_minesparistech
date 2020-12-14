@@ -13,9 +13,13 @@
 
 ## Introduction
 
+repo: https://github.com/icannos/c_simd_minesparistech
+
 We wrote 2 versions of the project: one using the join to serialize the accumulation of the results over the thread and
 a second one using a mutex in each thread to handle concurrent writing at the same address. We found that the mutex 
 version was the most efficient (using -O1 optimization on gcc).
+
+We made sure to avoid false sharing in the first version but with no significant improvements.
 
 For each we test the sequential norm on a single thread and on multithread and the vectorized norm on a single thread
 and on multithread. 
